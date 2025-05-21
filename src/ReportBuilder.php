@@ -68,7 +68,6 @@ class ReportBuilder
         $this->generateFilePages($reportDir);
         $this->generateIndexPage($reportDir);
 
-        echo "HTML coverage report generated at: $reportDir\n";
     }
 
     private function generateDirectoryPages(string $reportDir): void

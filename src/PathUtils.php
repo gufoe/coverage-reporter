@@ -9,19 +9,11 @@ class PathUtils
      */
     public static function cssPath(string $fullPath, string $rootPath, bool $isFile = false): string
     {
-        $root = rtrim($rootPath, '/');
-        // Ensure $root ends with a slash for prefix matching, unless it's the root directory '/'
-        $rootPrefix = ($root === '/') ? '/' : $root . '/';
+        $relative = self::_resolveAndGetRelativePath($fullPath, $rootPath);
 
-        // Check if $fullPath starts with the $rootPrefix
-        if (!str_starts_with($fullPath, $rootPrefix)) {
-            // If not, the path is outside the root scope. Return just the CSS path.
-            // This might indicate an error in the caller, but we handle it gracefully.
+        if ($relative === null) {
             return 'assets/css/coverage.css';
         }
-
-        // Remove the $rootPrefix from the beginning of $fullPath
-        $relative = substr($fullPath, strlen($rootPrefix));
 
         if ($relative === '') {
             $depth = 0;
@@ -39,19 +31,12 @@ class PathUtils
      */
     public static function directoryIndex(string $fullPath, string $rootPath): string
     {
-        $root = rtrim($rootPath, '/');
-        // Ensure $root ends with a slash for prefix matching, unless it's the root directory '/'
-        $rootPrefix = ($root === '/') ? '/' : $root . '/';
+        $relative = self::_resolveAndGetRelativePath($fullPath, $rootPath);
 
-        // Check if $fullPath starts with the $rootPrefix
-        if (!str_starts_with($fullPath, $rootPrefix)) {
-            // If not, the directory is outside the root scope. Return just index.html.
-            // This might indicate an error in the caller, but we handle it gracefully.
+        if ($relative === null) {
             return 'index.html';
         }
 
-        // Remove the $rootPrefix from the beginning of $fullPath
-        $relative = substr($fullPath, strlen($rootPrefix));
         return ($relative === '' ? '' : $relative . '/') . 'index.html';
     }
 
@@ -60,19 +45,12 @@ class PathUtils
      */
     public static function fileHtml(string $fullPath, string $rootPath): string
     {
-        $root = rtrim($rootPath, '/');
-        // Ensure $root ends with a slash for prefix matching, unless it's the root directory '/'
-        $rootPrefix = ($root === '/') ? '/' : $root . '/';
+        $relative = self::_resolveAndGetRelativePath($fullPath, $rootPath);
 
-        // Check if $fullPath starts with the $rootPrefix
-        if (!str_starts_with($fullPath, $rootPrefix)) {
-            // If not, the file is outside the root scope. Return just the basename.
-            // This might indicate an error in the caller, but we handle it gracefully.
+        if ($relative === null) {
             return basename($fullPath) . '.html';
         }
 
-        // Remove the $rootPrefix from the beginning of $fullPath
-        $relative = substr($fullPath, strlen($rootPrefix));
         return $relative . '.html';
     }
 
@@ -81,9 +59,16 @@ class PathUtils
      */
     public static function asset(string $assetPath, string $fromPath, string $rootPath): string
     {
-        $root = rtrim($rootPath, '/');
-        $relative = ltrim(str_replace($root, '', $fromPath), '/');
-        $depth = $relative === '' ? 0 : substr_count($relative, '/');
+        $relativeFrom = self::_resolveAndGetRelativePath($fromPath, $rootPath);
+
+        if ($relativeFrom === null) {
+            // If fromPath is outside rootPath, we can't reliably determine depth.
+            // Default to a direct path to the asset, assuming it's relative to the current location.
+            // This case should ideally not happen if inputs are always within the project scope.
+            return $assetPath;
+        }
+
+        $depth = $relativeFrom === '' ? 0 : substr_count($relativeFrom, '/');
         return str_repeat('../', $depth) . $assetPath;
     }
 
@@ -94,32 +79,39 @@ class PathUtils
     public static function breadcrumbs(string $fullPath, string $rootPath, bool $isFile = false): array
     {
         $breadcrumbs = [];
-        $root = rtrim($rootPath, '/');
-        $relative = ltrim(str_replace($root, '', $fullPath), '/');
+        $relative = self::_resolveAndGetRelativePath($fullPath, $rootPath);
+
+        if ($relative === null) {
+            // If path is outside root, return a simple breadcrumb to root and the current item.
+            $breadcrumbs['Root'] = 'index.html';
+            $breadcrumbs[self::basename($fullPath)] = null;
+            return $breadcrumbs;
+        }
+
         $parts = array_filter(explode('/', $relative));
-        if ($isFile) {
-            $depth = count($parts);
-            $breadcrumbs['Root'] = str_repeat('../', $depth - 1) . 'index.html';
-            foreach ($parts as $i => $part) {
-                $isLast = ($i === $depth - 1);
-                if ($isLast) {
-                    $breadcrumbs[$part] = null;
-                } else {
-                    $breadcrumbs[$part] = str_repeat('../', $depth - $i - 2) . 'index.html';
-                }
-            }
-        } else {
-            $depth = count($parts);
-            $breadcrumbs['Root'] = str_repeat('../', $depth) . 'index.html';
-            foreach ($parts as $i => $part) {
-                $isLast = ($i === $depth - 1);
-                if ($isLast) {
-                    $breadcrumbs[$part] = null;
-                } else {
-                    $breadcrumbs[$part] = str_repeat('../', $depth - $i - 1) . 'index.html';
-                }
+        $depth = count($parts);
+
+        // Determine the base depth for ../ prefixes.
+        // For files, it's one less than for directories because the file itself is the last part.
+        // For directories, the last part is a directory, so links go up from there.
+        $baseLinkDepth = $isFile ? $depth -1 : $depth;
+        if ($baseLinkDepth < 0) $baseLinkDepth = 0; // Handle case where $fullPath is $rootPath and $isFile is true
+
+        $breadcrumbs['Root'] = str_repeat('../', $baseLinkDepth) . 'index.html';
+
+        foreach ($parts as $i => $part) {
+            $isLast = ($i === $depth - 1);
+            if ($isLast) {
+                $breadcrumbs[$part] = null;
+            } else {
+                // For files, the path to an intermediate directory needs to go up one less level.
+                // For directories, the path to an intermediate directory is relative to the current directory depth.
+                $linkDepth = $isFile ? $depth - $i - 2 : $depth - $i - 1;
+                if ($linkDepth < 0) $linkDepth = 0; // Ensure no negative repeat count
+                $breadcrumbs[$part] = str_repeat('../', $linkDepth) . 'index.html';
             }
         }
+
         return $breadcrumbs;
     }
 
@@ -163,5 +155,24 @@ class PathUtils
         }
         $up = str_repeat('../', max(0, count($fromParts) - 1)); // -1 because $from is a file, not a dir
         return $up . implode('/', $toParts);
+    }
+
+    /**
+     * Resolves a full path against a root path and returns the relative path if contained.
+     *
+     * @param string $fullPath The full path to resolve.
+     * @param string $rootPath The root path to resolve against.
+     * @return string|null The relative path if $fullPath is under $rootPath, otherwise null.
+     */
+    private static function _resolveAndGetRelativePath(string $fullPath, string $rootPath): ?string
+    {
+        $root = rtrim($rootPath, '/');
+        // Ensure $root ends with a slash for prefix matching, unless it's the root directory '/'
+        $rootPrefix = ($root === '/') ? '/' : $root . '/';
+
+        if (str_starts_with($fullPath, $rootPrefix)) {
+            return substr($fullPath, strlen($rootPrefix));
+        }
+        return null;
     }
 }
