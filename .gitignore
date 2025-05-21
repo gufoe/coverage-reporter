@@ -1,0 +1,18 @@
+# Composer
+/vendor/
+/composer.lock
+
+# PHPUnit
+.phpunit.cache/
+
+# Coverage
+coverage/
+coverage-report/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/

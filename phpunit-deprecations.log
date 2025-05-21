@@ -1,0 +1,17 @@
+PHPUnit 10.5.46 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.6
+Configuration: /home/jake/pro/coverage-reporter/phpunit.xml
+
+....                                                                4 / 4 (100%)
+
+Time: 00:00.161, Memory: 10.00 MB
+
+Coverage (Gufoe\CoverageReporter\Tests\Coverage)
+ ✔ Collect throws exception when not started
+ ✔ Start and collect basic functionality
+ ✔ Multiple start calls
+ ✔ Generate html report
+
+OK, but there were issues!
+Tests: 4, Assertions: 9, PHPUnit Deprecations: 1.
