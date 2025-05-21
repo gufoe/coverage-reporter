@@ -2,7 +2,7 @@
 namespace CoverageReporter\Tests;
 
 class TestClass {
-    public function test() {
+    public function test(): bool {
         return true;
     }
 }

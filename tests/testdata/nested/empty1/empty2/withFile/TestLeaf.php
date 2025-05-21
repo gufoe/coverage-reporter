@@ -1,3 +1,3 @@
 <?php
 namespace CoverageReporter\Tests;
-class TestLeaf { public function test() { return 42; } }
+class TestLeaf { public function test(): int { return 1; } }

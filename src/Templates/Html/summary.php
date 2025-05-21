@@ -42,7 +42,7 @@
                     <?= $summary->files !== null ? number_format($summary->fileCoverage ?? 0, 1) . '%' : 'N/A' ?>
                 </span>
             </div>
-            <div class="percentage-bar <?= $summary->fileCoverage < 50 ? 'danger' : ($summary->fileCoverage < 80 ? 'warning' : '') ?>">
+            <div class="percentage-bar <?= $summary->fileCoverage !== null ? ($summary->fileCoverage < 50 ? 'danger' : ($summary->fileCoverage < 80 ? 'warning' : '')) : '' ?>">
                 <div class="fill" style="width: <?= $summary->fileCoverage ?? 0 ?>%"></div>
             </div>
         </div>

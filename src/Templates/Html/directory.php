@@ -7,11 +7,15 @@
  * @var CoverageReporter\CoverageSummary $summary Coverage summary statistics
  * @var string $title
  * @var string $cssPath
- * @var array $breadcrumbs
+ * @var array<string, string|null> $breadcrumbs
  */
 
 if (!function_exists('isNA')) {
-    function isNA($summary) {
+    /**
+     * @param CoverageReporter\CoverageSummary $summary
+     * @return bool
+     */
+    function isNA(CoverageReporter\CoverageSummary $summary): bool {
         return $summary->total === null || $summary->executed === null;
     }
 }
@@ -68,14 +72,15 @@ include __DIR__ . '/summary.php';
                 <tr>
                     <td class="filename">
                         <a href="<?= htmlspecialchars($item['url']) ?>">
-                            <?= htmlspecialchars($item['object']->name) ?><?= isset($item['object']->children) && $item['object']->children !== null ? '/' : '' ?>
+                            <?php $obj = $item['object']; ?>
+                            <?= htmlspecialchars(property_exists($obj, 'name') ? $obj->name : '') ?><?= isset($obj->children) && $obj->children !== null ? '/' : '' ?>
                         </a>
                     </td>
                     <td>
                         <div class="percentage-bar <?= $item['summary']->coverage < 50 ? 'danger' : ($item['summary']->coverage < 80 ? 'warning' : '') ?>">
                             <div class="fill" style="width: <?= $item['summary']->coverage ?? 0 ?>%"></div>
                         </div>
-                        <span class="percentage <?= isNA($item['summary']) ? 'na' : '' ?>"><?= isNA($item['summary']) ? 'N/A' : number_format($item['summary']->coverage, 1) . '%' ?></span>
+                        <span class="percentage <?= isNA($item['summary']) ? 'na' : '' ?>"><?= isNA($item['summary']) ? 'N/A' : number_format($item['summary']->coverage ?? 0.0, 1) . '%' ?></span>
                     </td>
                     <td class="<?= ($item['summary']->total === null || $item['summary']->executed === null) ? 'na' : '' ?>">
                         <?php
@@ -91,7 +96,7 @@ include __DIR__ . '/summary.php';
                             <div class="percentage-bar <?= $item['summary']->fileCoverage < 50 ? 'danger' : ($item['summary']->fileCoverage < 80 ? 'warning' : '') ?>">
                                 <div class="fill" style="width: <?= $item['summary']->fileCoverage ?? 0 ?>%"></div>
                             </div>
-                            <span class="percentage <?= $item['summary']->files > 0 ? '' : 'na' ?>"><?= $item['summary']->files > 0 ? number_format($item['summary']->fileCoverage ?? 0, 1) . '%' : 'N/A' ?></span>
+                            <span class="percentage <?= $item['summary']->files > 0 ? '' : 'na' ?>"><?= $item['summary']->files > 0 ? number_format($item['summary']->fileCoverage ?? 0.0, 1) . '%' : 'N/A' ?></span>
                         <?php else: ?>
                             <!-- blank for files -->
                         <?php endif; ?>

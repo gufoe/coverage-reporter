@@ -43,19 +43,45 @@ Coverage::start();
 // Stop collecting and get the coverage data
 $coverageData = Coverage::stop();
 
-// Generate HTML report
-Coverage::generateHtmlReport('/path/to/output/folder', $coverageData);
+// Create a builder for your project root directory
+$builder = Coverage::builder('/path/to/project/root');
 
-// To speed up the report generation, you can filter the files to be included in the report.
-Coverage::generateHtmlReport('/path/to/output/folder', $coverageData, [
-    '/path/to/include/directory/',
-    '/path/to/include/file.php',
-]);
+// Include files or directories you want to analyze
+$builder->includeFile('/path/to/file.php');
+$builder->includeFile('/path/to/another/file.php');
+// Or include all files in a directory
+$builder->includeAll();
+
+// Add the coverage data to the builder
+$builder->addCoverageData($coverageData);
+
+// Generate HTML report
+$builder->buildHtmlReport('/path/to/output/folder');
+
+// You can also generate a JSON report
+$jsonReport = $builder->buildJsonReport();
+```
+
+The builder supports method chaining for a more fluent interface:
+
+```php
+// Create a builder and configure it in one go
+$builder = Coverage::builder('/path/to/project/root')
+    ->includeFile('/path/to/file.php')
+    ->includeFile('/path/to/another/file.php')
+    ->addCoverageData($coverageData);
+
+// Generate the report
+$builder->buildHtmlReport('/path/to/output/folder');
 ```
 
 ## Merging Multiple Coverage Runs
 
-You can merge coverage data from multiple, separate runs (for example, if you run different test suites or scripts independently) and generate a single unified report. This is useful for combining coverage from different sources or parallel test runs.
+You can handle multiple coverage runs in two ways:
+
+### Method 1: Merge Coverage Data First
+
+This approach combines the coverage data before creating the report:
 
 ```php
 use CoverageReporter\Coverage;
@@ -73,11 +99,39 @@ $coverage2 = Coverage::stop();
 // Merge the coverage arrays
 $mergedCoverage = Coverage::mergeCoverage([$coverage1, $coverage2]);
 
-// Generate a single HTML report from the merged data
-Coverage::generateHtmlReport('/path/to/output/folder', $mergedCoverage);
+// Create a builder and generate a report with the merged data
+$builder = Coverage::builder('/path/to/project/root')
+    ->includeAll()
+    ->addCoverageData($mergedCoverage)
+    ->buildHtmlReport('/path/to/output/folder');
 ```
 
-You can merge as many coverage arrays as you need. The merged report will reflect the combined coverage from all runs.
+### Method 2: Add Coverage Data Directly
+
+Alternatively, you can add each coverage data set directly to the builder:
+
+```php
+use CoverageReporter\Coverage;
+
+// Run 1
+Coverage::start();
+// ... code or tests for the first run ...
+$coverage1 = Coverage::stop();
+
+// Run 2
+Coverage::start();
+// ... code or tests for the second run ...
+$coverage2 = Coverage::stop();
+
+// Create a builder and add each coverage data set
+$builder = Coverage::builder('/path/to/project/root')
+    ->includeAll()
+    ->addCoverageData($coverage1)
+    ->addCoverageData($coverage2)
+    ->buildHtmlReport('/path/to/output/folder');
+```
+
+Both methods will produce the same result. Choose the one that better fits your workflow. The first method is useful if you need to manipulate the merged data before generating the report, while the second method is simpler if you just want to combine the coverage data directly.
 
 ## Architecture
 

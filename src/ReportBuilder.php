@@ -2,20 +2,18 @@
 
 namespace CoverageReporter;
 
+use CoverageReporter\Exceptions\CoverageExceptionFileOutsideDirectory;
 use CoverageReporter\ReportDirectory;
 use CoverageReporter\PathUtils;
 
 class ReportBuilder
 {
-    /** @var array<string, array<int, int>> This is the coverage data collected by Coverage::stop() */
-    private array $data;
 
     /** @var ReportDirectory The root directory */
     private ReportDirectory $root;
 
-    public function __construct(string $root, array $data)
+    public function __construct(string $root)
     {
-        $this->data = $data;
         $this->root = new ReportDirectory($root);
     }
 
@@ -24,20 +22,46 @@ class ReportBuilder
         return $this->root;
     }
 
-    function includeAll(): void
+    function includeAll(): self
     {
         $this->root->autoFill();
+        return $this;
     }
 
-    function includeFile(string $file): void
+    function includeFile(string $file): self
     {
         $this->root->addFile($file);
+        return $this;
     }
 
-    function includeDirectory(string $directory): void
+    function includeDirectory(string $directory): self
     {
         $dir = $this->root->addDirectory($directory);
         $dir->autoFill();
+        return $this;
+    }
+
+    /**
+     * @param array<string, array<int, int>> $data
+     */
+    public function addCoverageData(array $data, bool $add_missing = false): self
+    {
+        foreach ($data as $path => $coverage) {
+            $file = $this->root->getFile($path);
+            if (!$file) {
+                if ($add_missing) {
+                    try {
+                        $file = $this->root->addFile($path);
+                    } catch (CoverageExceptionFileOutsideDirectory $e) {
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
+            }
+            $file->addCoverageData($coverage);
+        }
+        return $this;
     }
 
     /**
@@ -46,15 +70,6 @@ class ReportBuilder
      */
     public function buildHtmlReport(string $folder): void
     {
-        if ($this->root->isEmpty()) {
-            // If no specific files have been included, include all files with coverage data
-            foreach ($this->data as $file => $coverage) {
-                if (file_exists($file) && PathUtils::startsWith($file, $this->root->getPath())) {
-                    $this->root->addFile($file);
-                }
-            }
-        }
-
         $reportDir = rtrim($folder, '/');
         $assetsDir = $reportDir . '/assets/css';
         if (!is_dir($assetsDir)) {
@@ -85,7 +100,7 @@ class ReportBuilder
 
         $cssPath = PathUtils::cssPath($dir->getPath(), $this->root->getPath(), false);
 
-        $dirNode = $dir->toNodeData($this->data);
+        $dirNode = $dir->toNodeData();
         $items = array_map(function(ReportNodeData $child) use ($outputDir, $currentOutputPath) {
             $targetPath = isset($child->children) && $child->children !== null
                 ? $outputDir . '/' . $child->name . '/index.html'
@@ -95,7 +110,7 @@ class ReportBuilder
                 'url' => PathUtils::relativeLink($currentOutputPath, $targetPath),
                 'summary' => $child->summary
             ];
-        }, $dirNode->children);
+        }, $dirNode->children ?? []);
 
         $content = $this->renderTemplate('directory', [
             'items' => $items,
@@ -138,9 +153,9 @@ class ReportBuilder
 
             $content = $this->renderTemplate('file', [
                 'filename' => PathUtils::basename($file->path),
-                'lines' => $file->getLineCoverage($this->data),
-                'summary' => $file->getSummary($this->data),
-                'coverageData' => $this->data[$file->path] ?? []
+                'lines' => $file->getLineCoverage(),
+                'summary' => $file->getSummary(),
+                'coverageData' => $file->getCoverageData()
             ]);
 
             $currentOutputPath = $filePath;
@@ -169,7 +184,7 @@ class ReportBuilder
     {
         $indexPath = $reportDir . '/index.html';
         if (!file_exists($indexPath)) {
-            $dirNode = $this->root->toNodeData($this->data);
+            $dirNode = $this->root->toNodeData();
             $currentOutputPath = $indexPath;
             $items = array_map(function($child) use ($reportDir, $currentOutputPath) {
                 $targetPath = isset($child->children) && $child->children !== null
@@ -180,7 +195,7 @@ class ReportBuilder
                     'url' => PathUtils::relativeLink($currentOutputPath, $targetPath),
                     'summary' => $child->summary
                 ];
-            }, $dirNode->children);
+            }, $dirNode->children ?? []);
 
             $cssPath = PathUtils::cssPath($this->root->getPath(), $this->root->getPath(), false);
 
@@ -208,24 +223,27 @@ class ReportBuilder
         }
     }
 
+    /**
+     * @param array<string, mixed> $variables
+     */
     private function renderTemplate(string $template, array $variables): string
     {
         extract($variables);
         ob_start();
         include __DIR__ . '/Templates/Html/' . $template . '.php';
-        return ob_get_clean();
+        return (string)ob_get_clean();
     }
 
     /**
      * Build a JSON report
-     * @return ReportNode The JSON report
+     * @return ReportNodeData The JSON report
      */
     public function buildJsonReport(): ReportNodeData
     {
         if ($this->root->isEmpty()) {
             $this->root->autoFill();
         }
-        return $this->root->toNodeData($this->data);
+        return $this->root->toNodeData();
     }
 
     /**

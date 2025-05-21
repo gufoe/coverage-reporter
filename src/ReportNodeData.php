@@ -9,7 +9,7 @@ class ReportNodeData implements \JsonSerializable
 {
     public readonly string $name;
     public readonly CoverageSummary $summary;
-    /** @var null|array<int, ReportNode> */
+    /** @var null|array<int, ReportNodeData> */
     public readonly ?array $children;
     /** @var null|array<int, int> */
     public readonly ?array $coverageData;
@@ -17,7 +17,7 @@ class ReportNodeData implements \JsonSerializable
     /**
      * @param string $name
      * @param CoverageSummary $summary
-     * @param null|array<int, ReportNode> $children
+     * @param null|array<int, ReportNodeData> $children
      * @param null|array<int, int> $coverageData
      */
     public function __construct(string $name, CoverageSummary $summary, ?array $children = null, ?array $coverageData = null)
@@ -28,6 +28,9 @@ class ReportNodeData implements \JsonSerializable
         $this->coverageData = $coverageData;
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function jsonSerialize(): array
     {
         $data = [

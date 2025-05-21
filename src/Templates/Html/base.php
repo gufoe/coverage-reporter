@@ -4,7 +4,7 @@
  *
  * @var string $title The page title
  * @var string $content The main content (should include summary)
- * @var array $breadcrumbs The breadcrumb trail
+ * @var array<string, string|null> $breadcrumbs The breadcrumb trail
  * @var string $cssPath The path to the CSS file
  */
 ?>

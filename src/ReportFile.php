@@ -4,6 +4,12 @@ namespace CoverageReporter;
 
 use CoverageReporter\ReportNode;
 use CoverageReporter\PathUtils;
+use PhpParser\NodeTraverser;
+use PhpParser\NodeVisitor\NameResolver;
+use PhpParser\ParserFactory;
+use PhpParser\Node;
+use PhpParser\Node\Stmt;
+use PhpParser\Node\Expr;
 
 class ReportFile implements ReportNode
 {
@@ -13,11 +19,144 @@ class ReportFile implements ReportNode
     public string $path;
 
     /**
+     * The coverage data for this file
+     * @var array<int, int>
+     */
+    private array $coverageData = [];
+
+    /**
      * @param string $path
      */
     public function __construct(string $path)
     {
         $this->path = $path;
+        $this->initializeSyntheticCoverage();
+    }
+
+    /**
+     * Initialize synthetic coverage data for all executable lines
+     */
+    private function initializeSyntheticCoverage(): void
+    {
+        if (!file_exists($this->path)) {
+            return;
+        }
+
+        $code = file_get_contents($this->path);
+        if ($code === false) {
+            return;
+        }
+
+        $parser = (new ParserFactory)->createForNewestSupportedVersion();
+        try {
+            $ast = $parser->parse($code);
+            if ($ast === null) {
+                return;
+            }
+
+            // Create a traverser to resolve names
+            $traverser = new NodeTraverser();
+            $traverser->addVisitor(new NameResolver());
+            $ast = $traverser->traverse($ast);
+
+            // Mark executable lines as not executed (-1)
+            foreach ($ast as $node) {
+                $this->markExecutableLines($node);
+            }
+        } catch (\PhpParser\Error $e) {
+            // If parsing fails, we'll just have an empty coverage data
+            return;
+        }
+    }
+
+    /**
+     * Recursively mark executable lines in the AST
+     */
+    private function markExecutableLines(Node $node): void
+    {
+        // Skip nodes without line information
+        if (!isset($node->getAttributes()['startLine'])) {
+            return;
+        }
+
+        $startLine = $node->getAttributes()['startLine'];
+        $endLine = $node->getAttributes()['endLine'] ?? $startLine;
+
+        // Only mark lines that contain executable code as not executed (-1)
+        if ($this->isExecutableNode($node)) {
+            for ($line = $startLine; $line <= $endLine; $line++) {
+                $this->coverageData[$line] = -1;
+            }
+        }
+
+        // Recursively process child nodes
+        foreach ($node->getSubNodeNames() as $name) {
+            $subNode = $node->$name;
+            if ($subNode instanceof Node) {
+                $this->markExecutableLines($subNode);
+            } elseif (is_array($subNode)) {
+                foreach ($subNode as $child) {
+                    if ($child instanceof Node) {
+                        $this->markExecutableLines($child);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Check if a node represents executable code
+     */
+    private function isExecutableNode(Node $node): bool
+    {
+        // Only mark actual executable statements
+        if ($node instanceof Stmt\Return_) {
+            return true;
+        }
+
+        // Function declarations and class declarations are not executable
+        if ($node instanceof Stmt\Class_ ||
+            $node instanceof Stmt\Function_ ||
+            $node instanceof Stmt\Interface_ ||
+            $node instanceof Stmt\Trait_ ||
+            $node instanceof Stmt\Namespace_) {
+            return false;
+        }
+
+        // Expressions that are part of a statement are executable
+        if ($node instanceof Expr) {
+            // Skip expressions that are part of declarations
+            $parent = $node->getAttribute('parent');
+            if ($parent instanceof Stmt\Class_ ||
+                $parent instanceof Stmt\Function_ ||
+                $parent instanceof Stmt\Interface_ ||
+                $parent instanceof Stmt\Trait_) {
+                return false;
+            }
+            return true;
+        }
+
+        // Control structures are executable
+        if ($node instanceof Stmt\If_ ||
+            $node instanceof Stmt\ElseIf_ ||
+            $node instanceof Stmt\Else_ ||
+            $node instanceof Stmt\For_ ||
+            $node instanceof Stmt\Foreach_ ||
+            $node instanceof Stmt\While_ ||
+            $node instanceof Stmt\Do_ ||
+            $node instanceof Stmt\Switch_ ||
+            $node instanceof Stmt\Case_ ||
+            $node instanceof Stmt\TryCatch ||
+            $node instanceof Stmt\Catch_ ||
+            $node instanceof Stmt\Finally_ ||
+            $node instanceof Stmt\Break_ ||
+            $node instanceof Stmt\Continue_ ||
+            $node instanceof Stmt\Goto_ ||
+            $node instanceof Stmt\Label) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -26,47 +165,35 @@ class ReportFile implements ReportNode
      */
     public function getSource(): string
     {
-        return file_get_contents($this->path);
+        $content = file_get_contents($this->path);
+        return $content === false ? '' : $content;
     }
 
     /**
      * Calculates coverage summary for this file:
      * 1. Checks if file has coverage data
-     * 2. Filters out dead code lines (-2)
-     * 3. Counts total and executed lines
-     * 4. Calculates coverage percentages
+     * 2. Counts total and executed lines
+     * 3. Calculates coverage percentages
      *
      * Coverage data format:
-     * - -2: Dead code (not executable)
      * - -1: Not executed
      * - 0+: Number of times executed
      *
-     * @param array<string, array<int, int>> $coverageData
      * @return CoverageSummary
      */
-    public function getSummary(array $coverageData): CoverageSummary
+    public function getSummary(): CoverageSummary
     {
-        if (!isset($coverageData[$this->path])) {
-            // For files not in coverage data, return null for total and executed to indicate N/A
-            return new CoverageSummary(0, null, null, 1, 0, 0);
+        // If no coverage data, return 0% coverage
+        if (empty($this->coverageData)) {
+            return new CoverageSummary(0, 0, 0, 1, 0, 0);
         }
 
-        $coverage = $coverageData[$this->path];
-
-        // Filter out dead code lines (-2)
-        $coverage = array_filter($coverage, fn($count) => $count !== -2);
-
-        $totalLines = count($coverage);
-        $executedLines = count(array_filter($coverage, fn($line) => $line !== -1));
+        $totalLines = count($this->coverageData);
+        $executedLines = count(array_filter($this->coverageData, fn($count) => $count > 0));
         $coveragePercent = $totalLines > 0 ? ($executedLines / $totalLines) * 100 : 0;
 
         // A file is considered covered if it has any executed lines
         $fileCoverage = $executedLines > 0 ? 100.0 : 0.0;
-
-        // If there are no lines to cover, treat as N/A
-        if ($totalLines === 0) {
-            return new CoverageSummary(0, null, null, 1, 0, 0);
-        }
 
         return new CoverageSummary($coveragePercent, $totalLines, $executedLines, 1, $totalLines, $fileCoverage);
     }
@@ -82,13 +209,11 @@ class ReportFile implements ReportNode
      * - 'not-executed': Line was not executed (count = 0 or -1)
      * - 'neutral': Line has no coverage data
      *
-     * @param array<string, array<int, int>> $coverageData
      * @return array<int, array{content: string, status: string}>
      */
-    public function getLineCoverage(array $coverageData): array
+    public function getLineCoverage(): array
     {
         $fileLines = explode("\n", $this->getSource());
-        $coverage = $coverageData[$this->path] ?? [];
         $result = [];
 
         // Convert to 1-based indexing
@@ -96,8 +221,8 @@ class ReportFile implements ReportNode
             $lineNumber = $i + 1;  // Convert to 1-based
             $status = 'neutral';
 
-            if (array_key_exists($lineNumber, $coverage)) {
-                $count = $coverage[$lineNumber];
+            if (array_key_exists($lineNumber, $this->coverageData)) {
+                $count = $this->coverageData[$lineNumber];
                 if ($count > 0) {
                     $status = 'executed';  // Green: line was executed
                 } else {
@@ -129,16 +254,15 @@ class ReportFile implements ReportNode
      * 2. Includes coverage summary
      * 3. Includes raw coverage data for detailed view
      *
-     * @param array<string, array<int, int>> $coverageData
      * @return ReportNodeData
      */
-    public function toNodeData(array $coverageData): ReportNodeData
+    public function toNodeData(): ReportNodeData
     {
         return new ReportNodeData(
             PathUtils::basename($this->path),
-            $this->getSummary($coverageData),
+            $this->getSummary(),
             null,
-            $coverageData[$this->path] ?? []
+            $this->coverageData
         );
     }
 
@@ -148,5 +272,25 @@ class ReportFile implements ReportNode
     public function getPath(): string
     {
         return $this->path;
+    }
+
+    /**
+     * Adds coverage data to this file
+     * @param array<int, int> $coverageData
+     */
+    public function addCoverageData(array $coverageData): void
+    {
+        foreach ($coverageData as $line => $count) {
+            $this->coverageData[$line] = isset($this->coverageData[$line]) ? max($this->coverageData[$line], $count) : $count;
+        }
+    }
+
+    /**
+     * Gets the coverage data for this file
+     * @return array<int, int>
+     */
+    public function getCoverageData(): array
+    {
+        return $this->coverageData;
     }
 }

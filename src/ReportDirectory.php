@@ -3,13 +3,14 @@
 namespace CoverageReporter;
 
 use CoverageReporter\CoverageSummary;
+use CoverageReporter\Exceptions\CoverageExceptionFileOutsideDirectory;
 use CoverageReporter\PathUtils;
 use CoverageReporter\JsonNode;
 
 interface ReportNode
 {
-    public function getSummary(array $coverageData): CoverageSummary;
-    public function toNodeData(array $coverageData): ReportNodeData;
+    public function getSummary(): CoverageSummary;
+    public function toNodeData(): ReportNodeData;
     public function getPath(): string;
 }
 
@@ -24,12 +25,14 @@ class ReportDirectory implements ReportNode
      * Directories in this directory, indexed by their basename
      * Example: ['app' => ReportDirectory('/path/to/app')]
      * Note: This means we can only have one directory with a given name at each level
+     * @var array<string, ReportDirectory>
      */
     public array $directories = [];
 
     /**
      * PHP files in this directory, indexed by their basename
      * Example: ['Test.php' => ReportFile('/path/to/Test.php')]
+     * @var array<string, ReportFile>
      */
     public array $files = [];
 
@@ -52,10 +55,15 @@ class ReportDirectory implements ReportNode
     /**
      * Recursively fills this directory with all files and subdirectories found
      * This is used when you want to include everything in a directory
+     * @return void
      */
     public function autoFill(): void
     {
-        foreach (glob($this->path . '/*') as $entry) {
+        $entries = glob($this->path . '/*');
+        if ($entries === false) {
+            return;
+        }
+        foreach ($entries as $entry) {
             if (is_file($entry)) {
                 $this->files[basename($entry)] = new ReportFile($entry);
             } elseif (is_dir($entry)) {
@@ -92,7 +100,7 @@ class ReportDirectory implements ReportNode
         }
 
         if (!PathUtils::startsWith($path, $this->path)) {
-            throw new \Exception("Path $path is not in directory $this->path");
+            throw new CoverageExceptionFileOutsideDirectory($path, $this->path);
         }
         return $path;
     }
@@ -246,10 +254,9 @@ class ReportDirectory implements ReportNode
     }
 
     /**
-     * @param array<string, array<int, int>> $coverageData
      * @return CoverageSummary
      */
-    public function getSummary(array $coverageData): CoverageSummary
+    public function getSummary(): CoverageSummary
     {
         $totalFiles = 0;
         $testedFiles = 0;
@@ -259,7 +266,7 @@ class ReportDirectory implements ReportNode
         // Count files in this directory
         foreach ($this->files as $file) {
             $this->addSummaryData(
-                $file->getSummary($coverageData),
+                $file->getSummary(),
                 $totalFiles,
                 $testedFiles,
                 $totalLines,
@@ -270,7 +277,7 @@ class ReportDirectory implements ReportNode
         // Add files and lines from subdirectories
         foreach ($this->directories as $dir) {
             $this->addSummaryData(
-                $dir->getSummary($coverageData),
+                $dir->getSummary(),
                 $totalFiles,
                 $testedFiles,
                 $totalLines,
@@ -279,27 +286,20 @@ class ReportDirectory implements ReportNode
         }
 
         // Calculate coverage percentages
-        $coverage = $testedFiles === 0 ? null : $this->calculateCoverage($totalLines, $totalExecuted);
-        $fileCoverage = $this->calculateCoverage($totalFiles, $testedFiles);
-
-        // Reset line counts if no files are tested
-        if ($testedFiles === 0) {
-            $totalLines = null;
-            $totalExecuted = null;
-        }
+        $coverage = $totalLines > 0 ? $this->calculateCoverage($totalLines, $totalExecuted) : 0;
+        $fileCoverage = $totalFiles > 0 ? $this->calculateCoverage($totalFiles, $testedFiles) : 0;
 
         return new CoverageSummary($coverage, $totalLines, $totalExecuted, $totalFiles, $testedFiles, $fileCoverage);
     }
 
     /**
-     * @param array<string, array<int, int>> $coverageData
      * @return ReportNodeData
      */
-    public function toNodeData(array $coverageData): ReportNodeData
+    public function toNodeData(): ReportNodeData
     {
         $children = [];
-        $addChild = function(ReportNode $node) use (&$children, $coverageData) {
-            $children[] = $node->toNodeData($coverageData);
+        $addChild = function(ReportNode $node) use (&$children) {
+            $children[] = $node->toNodeData();
         };
 
         array_map($addChild, $this->directories);
@@ -307,7 +307,7 @@ class ReportDirectory implements ReportNode
 
         return new ReportNodeData(
             PathUtils::basename($this->path),
-            $this->getSummary($coverageData),
+            $this->getSummary(),
             $children
         );
     }
@@ -315,31 +315,61 @@ class ReportDirectory implements ReportNode
     /**
      * @param string $rootPath
      * @param array<string, array<int, int>> $coverageData
-     * @return array<int, array{object: object, url: string, summary: JsonNode}>
+     * @return array<int, array{object: object, url: string, summary: \CoverageReporter\ReportNodeData}>
      */
     public function getAllItems(string $rootPath, array $coverageData): array
     {
-        $createItem = function(ReportNode $node, string $url) use ($coverageData) {
+        $createItem = function(ReportNode $node, string $url) {
             return [
                 'object' => $node,
                 'url' => $url,
-                'summary' => $node->toNodeData($coverageData)
+                'summary' => ($node instanceof ReportDirectory) ? $node->toNodeData() : $node->toNodeData(),
             ];
         };
 
-        $dirItems = array_merge(...array_map(
+        $dirItems = array_values(array_merge(...array_map(
             fn($subdir) => array_merge(
                 [$createItem($subdir, PathUtils::directoryIndex($subdir->path, $rootPath))],
                 $subdir->getAllItems($rootPath, $coverageData)
             ),
             $this->directories
-        ));
+        )));
 
-        $fileItems = array_map(
+        $fileItems = array_values(array_map(
             fn($file) => $createItem($file, PathUtils::fileHtml($file->path, $rootPath)),
             $this->files
-        );
+        ));
 
         return array_merge($dirItems, $fileItems);
+    }
+
+    /**
+     * Get a file from this directory or a subdirectory recursively
+     * @param string $file the path absolute or relative to this directory
+     * @return ReportFile|null
+     */
+    function getFile(string $file): ReportFile|null
+    {
+        try {
+            $file = $this->validatePath($file);
+        } catch (\Exception $e) {
+            return null;
+        }
+
+        // Check if file exists in this directory
+        $basename = PathUtils::basename($file);
+        if (isset($this->files[$basename])) {
+            return $this->files[$basename];
+        }
+
+        // Check subdirectories
+        foreach ($this->directories as $dir) {
+            $result = $dir->getFile($file);
+            if ($result !== null) {
+                return $result;
+            }
+        }
+
+        return null;
     }
 }
