@@ -461,6 +461,101 @@ class CoverageTest extends TestCase
         $this->assertEquals('file', $debug2['type']);
     }
 
+    public function testNestedDirectoriesWithSameName(): void
+    {
+        // Create test directory structure
+        $baseDir = __DIR__ . '/test-files';
+        $nestedDir = $baseDir . '/app/app';
+        mkdir($nestedDir, 0777, true);
+
+        // Create test files in both directories
+        $rootFile = $baseDir . '/app/TestRoot.php';
+        $nestedFile = $nestedDir . '/TestNested.php';
+
+        file_put_contents($rootFile, '<?php namespace CoverageReporter\Tests; class TestRoot { public function test() { return true; } }');
+        file_put_contents($nestedFile, '<?php namespace CoverageReporter\Tests; class TestNested { public function test() { return true; } }');
+
+        require_once $rootFile;
+        require_once $nestedFile;
+
+        // Generate coverage data
+        Coverage::start();
+        $testRoot = new \CoverageReporter\Tests\TestRoot();
+        $testNested = new \CoverageReporter\Tests\TestNested();
+        $testRoot->test();
+        $testNested->test();
+        $coverage = Coverage::stop();
+
+        // Create builder and include both directories
+        $builder = Coverage::builder($baseDir, $coverage);
+        $builder->includeDirectory($baseDir . '/app');
+        $builder->includeDirectory($nestedDir);
+
+        $report_dir = $this->setupTestFolder('testNestedDirectoriesWithSameName');
+        $builder->buildHtmlReport($report_dir);
+
+        // Verify both files exist in their correct locations
+        $this->assertFileExists($report_dir . '/app/TestRoot.php.html');
+        $this->assertFileExists($report_dir . '/app/app/TestNested.php.html');
+
+        // Verify the directory structure is maintained
+        $this->assertFileExists($report_dir . '/app/index.html');
+        $this->assertFileExists($report_dir . '/app/app/index.html');
+
+        // Clean up test files
+        unlink($rootFile);
+        unlink($nestedFile);
+        rmdir($nestedDir);
+        rmdir($baseDir . '/app');
+    }
+
+    public function testNestedDirectoriesWithSameNameAndFiles(): void
+    {
+        // Create test directory structure
+        $baseDir = __DIR__ . '/test-files';
+        $nestedDir = $baseDir . '/app/app';
+        mkdir($nestedDir, 0777, true);
+
+        // Create test files in both directories
+        $rootFile = $baseDir . '/app/TestRoot.php';
+        $nestedFile = $nestedDir . '/TestNested.php';
+
+        file_put_contents($rootFile, '<?php namespace CoverageReporter\Tests; class TestRoot { public function test() { return true; } }');
+        file_put_contents($nestedFile, '<?php namespace CoverageReporter\Tests; class TestNested { public function test() { return true; } }');
+
+        require_once $rootFile;
+        require_once $nestedFile;
+
+        // Generate coverage data
+        Coverage::start();
+        $testRoot = new \CoverageReporter\Tests\TestRoot();
+        $testNested = new \CoverageReporter\Tests\TestNested();
+        $testRoot->test();
+        $testNested->test();
+        $coverage = Coverage::stop();
+
+        // Create builder and include the nested directory
+        $builder = Coverage::builder($baseDir, $coverage);
+        $builder->includeDirectory($nestedDir);
+
+        $report_dir = $this->setupTestFolder('testNestedDirectoriesWithSameNameAndFiles');
+        $builder->buildHtmlReport($report_dir);
+
+        // Verify files are in their correct locations
+        $this->assertFileExists($report_dir . '/app/app/TestNested.php.html');
+        $this->assertFileDoesNotExist($report_dir . '/TestNested.php.html'); // Should not be in root
+
+        // Verify the directory structure is maintained
+        $this->assertFileExists($report_dir . '/app/index.html');
+        $this->assertFileExists($report_dir . '/app/app/index.html');
+
+        // Clean up test files
+        unlink($rootFile);
+        unlink($nestedFile);
+        rmdir($nestedDir);
+        rmdir($baseDir . '/app');
+    }
+
     private function someFunction(): string
     {
         $a = 1;

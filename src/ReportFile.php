@@ -7,6 +7,9 @@ use CoverageReporter\PathUtils;
 
 class ReportFile implements ReportNode
 {
+    /**
+     * The absolute path to this file
+     */
     public string $path;
 
     /**
@@ -18,6 +21,7 @@ class ReportFile implements ReportNode
     }
 
     /**
+     * Gets the source code of this file
      * @return string
      */
     public function getSource(): string
@@ -26,6 +30,17 @@ class ReportFile implements ReportNode
     }
 
     /**
+     * Calculates coverage summary for this file:
+     * 1. Checks if file has coverage data
+     * 2. Filters out dead code lines (-2)
+     * 3. Counts total and executed lines
+     * 4. Calculates coverage percentages
+     *
+     * Coverage data format:
+     * - -2: Dead code (not executable)
+     * - -1: Not executed
+     * - 0+: Number of times executed
+     *
      * @param array<string, array<int, int>> $coverageData
      * @return CoverageSummary
      */
@@ -57,6 +72,16 @@ class ReportFile implements ReportNode
     }
 
     /**
+     * Gets line-by-line coverage information for this file:
+     * 1. Splits file into lines
+     * 2. Maps each line to its coverage status
+     * 3. Returns array with line numbers as keys and coverage info as values
+     *
+     * Coverage statuses:
+     * - 'executed': Line was executed (count > 0)
+     * - 'not-executed': Line was not executed (count = 0 or -1)
+     * - 'neutral': Line has no coverage data
+     *
      * @param array<string, array<int, int>> $coverageData
      * @return array<int, array{content: string, status: string}>
      */
@@ -90,6 +115,7 @@ class ReportFile implements ReportNode
     }
 
     /**
+     * Gets the basename of this file for breadcrumb display
      * @return string
      */
     public function getBreadcrumbName(): string
@@ -98,6 +124,11 @@ class ReportFile implements ReportNode
     }
 
     /**
+     * Converts this file to a node in the report structure:
+     * 1. Uses basename as the node name
+     * 2. Includes coverage summary
+     * 3. Includes raw coverage data for detailed view
+     *
      * @param array<string, array<int, int>> $coverageData
      * @return ReportNodeData
      */
@@ -111,6 +142,9 @@ class ReportFile implements ReportNode
         );
     }
 
+    /**
+     * @return string
+     */
     public function getPath(): string
     {
         return $this->path;

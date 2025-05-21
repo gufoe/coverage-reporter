@@ -10,7 +10,19 @@ class PathUtils
     public static function cssPath(string $fullPath, string $rootPath, bool $isFile = false): string
     {
         $root = rtrim($rootPath, '/');
-        $relative = ltrim(str_replace($root, '', $fullPath), '/');
+        // Ensure $root ends with a slash for prefix matching, unless it's the root directory '/'
+        $rootPrefix = ($root === '/') ? '/' : $root . '/';
+
+        // Check if $fullPath starts with the $rootPrefix
+        if (!str_starts_with($fullPath, $rootPrefix)) {
+            // If not, the path is outside the root scope. Return just the CSS path.
+            // This might indicate an error in the caller, but we handle it gracefully.
+            return 'assets/css/coverage.css';
+        }
+
+        // Remove the $rootPrefix from the beginning of $fullPath
+        $relative = substr($fullPath, strlen($rootPrefix));
+
         if ($relative === '') {
             $depth = 0;
         } else {
@@ -28,7 +40,18 @@ class PathUtils
     public static function directoryIndex(string $fullPath, string $rootPath): string
     {
         $root = rtrim($rootPath, '/');
-        $relative = ltrim(str_replace($root, '', $fullPath), '/');
+        // Ensure $root ends with a slash for prefix matching, unless it's the root directory '/'
+        $rootPrefix = ($root === '/') ? '/' : $root . '/';
+
+        // Check if $fullPath starts with the $rootPrefix
+        if (!str_starts_with($fullPath, $rootPrefix)) {
+            // If not, the directory is outside the root scope. Return just index.html.
+            // This might indicate an error in the caller, but we handle it gracefully.
+            return 'index.html';
+        }
+
+        // Remove the $rootPrefix from the beginning of $fullPath
+        $relative = substr($fullPath, strlen($rootPrefix));
         return ($relative === '' ? '' : $relative . '/') . 'index.html';
     }
 
@@ -38,7 +61,18 @@ class PathUtils
     public static function fileHtml(string $fullPath, string $rootPath): string
     {
         $root = rtrim($rootPath, '/');
-        $relative = ltrim(str_replace($root, '', $fullPath), '/');
+        // Ensure $root ends with a slash for prefix matching, unless it's the root directory '/'
+        $rootPrefix = ($root === '/') ? '/' : $root . '/';
+
+        // Check if $fullPath starts with the $rootPrefix
+        if (!str_starts_with($fullPath, $rootPrefix)) {
+            // If not, the file is outside the root scope. Return just the basename.
+            // This might indicate an error in the caller, but we handle it gracefully.
+            return basename($fullPath) . '.html';
+        }
+
+        // Remove the $rootPrefix from the beginning of $fullPath
+        $relative = substr($fullPath, strlen($rootPrefix));
         return $relative . '.html';
     }
 
