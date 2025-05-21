@@ -32,8 +32,8 @@ class ReportFile implements ReportNode
     public function getSummary(array $coverageData): CoverageSummary
     {
         if (!isset($coverageData[$this->path])) {
-            // For files not in coverage data, return -1 for total to indicate N/A
-            return new CoverageSummary(0, -1, 0, 1, -1, 0);
+            // For files not in coverage data, return null for total and executed to indicate N/A
+            return new CoverageSummary(0, null, null, 1, 0, 0);
         }
 
         $coverage = $coverageData[$this->path];
@@ -47,6 +47,11 @@ class ReportFile implements ReportNode
 
         // A file is considered covered if it has any executed lines
         $fileCoverage = $executedLines > 0 ? 100.0 : 0.0;
+
+        // If there are no lines to cover, treat as N/A
+        if ($totalLines === 0) {
+            return new CoverageSummary(0, null, null, 1, 0, 0);
+        }
 
         return new CoverageSummary($coveragePercent, $totalLines, $executedLines, 1, $totalLines, $fileCoverage);
     }

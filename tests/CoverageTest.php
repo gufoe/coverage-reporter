@@ -90,6 +90,18 @@ class CoverageTest extends TestCase
         Coverage::start(); // Should throw an exception
     }
 
+    /**
+     * Extracts the COVERAGE_DEBUG JSON from a report file
+     */
+    private function extractCoverageDebug(string $htmlFile): ?array
+    {
+        $content = file_get_contents($htmlFile);
+        if (preg_match('/<!-- COVERAGE_DEBUG: (.*?) -->/s', $content, $matches)) {
+            return json_decode($matches[1], true);
+        }
+        return null;
+    }
+
     public function testGenerateHtmlReport(): void
     {
         // Use static test file
@@ -125,7 +137,28 @@ class CoverageTest extends TestCase
         // Verify the report content
         $reportContent = file_get_contents($testFileReport);
         $this->assertStringContainsString('TestClass.php', $reportContent);
-        $this->assertStringContainsString('100.0%', $reportContent); // Only the test() method is executed
+
+        // Verify COVERAGE_DEBUG JSON in file report
+        $debug = $this->extractCoverageDebug($testFileReport);
+        $this->assertNotNull($debug, 'COVERAGE_DEBUG JSON should be present');
+        $this->assertEquals(1, $debug['lines']);
+        $this->assertEquals(1, $debug['executed_lines']);
+        $this->assertEquals(1, $debug['files']);
+        $this->assertEquals(1, $debug['executed_files']);
+        $this->assertEquals(100, $debug['line_coverage']);
+        $this->assertEquals(100, $debug['file_coverage']);
+        $this->assertEquals('file', $debug['type']);
+
+        // Also check the index.html summary COVERAGE_DEBUG
+        $indexDebug = $this->extractCoverageDebug($report_dir . '/index.html');
+        $this->assertNotNull($indexDebug, 'COVERAGE_DEBUG JSON should be present in index');
+        $this->assertEquals(1, $indexDebug['lines']);
+        $this->assertEquals(1, $indexDebug['executed_lines']);
+        $this->assertEquals(1, $indexDebug['executed_files']);
+        $this->assertEquals(1, $indexDebug['files']);
+        $this->assertEquals(100, $indexDebug['line_coverage']);
+        $this->assertEquals(100, $indexDebug['file_coverage']);
+        $this->assertEquals('directory', $indexDebug['type']);
     }
 
     public function testGenerateHtmlReportWithFilter(): void
@@ -158,6 +191,28 @@ class CoverageTest extends TestCase
         $relativeTestFile2 = ltrim(str_replace(dirname($testFile2), '', $testFile2), '/');
         $this->assertFileExists($report_dir . '/' . $relativeTestFile1 . '.html');
         $this->assertFileDoesNotExist($report_dir . '/' . $relativeTestFile2 . '.html');
+
+        // Verify COVERAGE_DEBUG JSON in file report
+        $debug = $this->extractCoverageDebug($report_dir . '/' . $relativeTestFile1 . '.html');
+        $this->assertNotNull($debug, 'COVERAGE_DEBUG JSON should be present');
+        $this->assertEquals(2, $debug['lines']);
+        $this->assertEquals(1, $debug['executed_lines']);
+        $this->assertEquals(1, $debug['files']);
+        $this->assertEquals(1, $debug['executed_files']);
+        $this->assertEquals(50, $debug['line_coverage']);
+        $this->assertEquals(100, $debug['file_coverage']);
+        $this->assertEquals('file', $debug['type']);
+
+        // Also check the index.html summary COVERAGE_DEBUG
+        $indexDebug = $this->extractCoverageDebug($report_dir . '/index.html');
+        $this->assertNotNull($indexDebug, 'COVERAGE_DEBUG JSON should be present in index');
+        $this->assertEquals(2, $indexDebug['lines']);
+        $this->assertEquals(1, $indexDebug['executed_lines']);
+        $this->assertEquals(1, $indexDebug['executed_files']);
+        $this->assertEquals(1, $indexDebug['files']);
+        $this->assertEquals(50, $indexDebug['line_coverage']);
+        $this->assertEquals(100, $indexDebug['file_coverage']);
+        $this->assertEquals('directory', $indexDebug['type']);
     }
 
     public function testGenerateJsonReport(): void
@@ -288,20 +343,29 @@ class CoverageTest extends TestCase
         $builder->buildHtmlReport($report_dir);
 
         // Check that the report for the file exists
-        $fileReport = $report_dir . '/nested/empty1/empty2/withFile/TestLeaf.php.html';
-        $this->assertFileExists($fileReport);
+        $fileReportPath = $report_dir . '/nested/empty1/empty2/withFile/TestLeaf.php.html';
+        $this->assertFileExists($fileReportPath);
+        $fileDebug = $this->extractCoverageDebug($fileReportPath);
+        $this->assertNotNull($fileDebug, 'COVERAGE_DEBUG JSON should be present in file report');
+        $this->assertEquals(1, $fileDebug['lines']);
+        $this->assertEquals(1, $fileDebug['executed_lines']);
+        $this->assertEquals(1, $fileDebug['files']);
+        $this->assertEquals(1, $fileDebug['executed_files']);
+        $this->assertEquals(100, $fileDebug['line_coverage']);
+        $this->assertEquals(100, $fileDebug['file_coverage']);
+        $this->assertEquals('file', $fileDebug['type']);
 
         // Check that the index for the root exists
         $this->assertFileExists($report_dir . '/nested/index.html');
-
-        // Check that the directory pages for empty1 and empty2 exist
-        $this->assertFileExists($report_dir . '/nested/empty1/index.html');
-        $this->assertFileExists($report_dir . '/nested/empty1/empty2/index.html');
-        $this->assertFileExists($report_dir . '/nested/empty1/empty2/withFile/index.html');
-
-        // Verify that the TestLeaf.php has 100% coverage
-        $fileReport = file_get_contents($fileReport);
-        $this->assertStringContainsString('100.0%', $fileReport);
+        $indexDebug = $this->extractCoverageDebug($report_dir . '/nested/index.html');
+        $this->assertNotNull($indexDebug, 'COVERAGE_DEBUG JSON should be present in index');
+        $this->assertEquals(1, $indexDebug['lines']);
+        $this->assertEquals(1, $indexDebug['executed_lines']);
+        $this->assertEquals(1, $indexDebug['executed_files']);
+        $this->assertEquals(1, $indexDebug['files']);
+        $this->assertEquals(100, $indexDebug['line_coverage']);
+        $this->assertEquals(100, $indexDebug['file_coverage']);
+        $this->assertEquals('directory', $indexDebug['type']);
     }
 
     public function testSimpleReport(): void
@@ -323,6 +387,78 @@ class CoverageTest extends TestCase
         $builder->buildHtmlReport($report_dir);
 
         $this->assertFileExists($report_dir . '/TestClass1.php.html');
+
+        // Check that index has 25% file coverage
+        $indexFile = $report_dir . '/index.html';
+        $indexDebug = $this->extractCoverageDebug($indexFile);
+        $this->assertNotNull($indexDebug, 'COVERAGE_DEBUG JSON should be present in index');
+        $this->assertEquals(1, $indexDebug['executed_files']);
+        $this->assertEquals(4, $indexDebug['files']);
+        $this->assertEquals(25, $indexDebug['file_coverage']);
+    }
+
+    public function testMergeCoverage(): void
+    {
+        // Use static test files
+        $testFile1 = $this->testDir . '/TestClass1.php';
+        $testFile2 = $this->testDir . '/TestClass2.php';
+        require_once $testFile1;
+        require_once $testFile2;
+
+        // First run - cover TestClass1
+        Coverage::start();
+        $testClass1 = new TestClass1();
+        $testClass1->test();
+        $coverage1 = Coverage::stop();
+
+        // Second run - cover TestClass2
+        Coverage::start();
+        $testClass2 = new TestClass2();
+        $testClass2->test();
+        $coverage2 = Coverage::stop();
+
+        // Merge coverage data
+        $mergedCoverage = Coverage::mergeCoverage($coverage1, $coverage2);
+
+        // Verify merged coverage contains both files
+        $this->assertArrayHasKey($testFile1, $mergedCoverage);
+        $this->assertArrayHasKey($testFile2, $mergedCoverage);
+
+        // Verify execution counts are preserved
+        foreach ($mergedCoverage[$testFile1] as $line => $count) {
+            $this->assertEquals($coverage1[$testFile1][$line], $count, "Line $line in TestClass1 should have same count");
+        }
+        foreach ($mergedCoverage[$testFile2] as $line => $count) {
+            $this->assertEquals($coverage2[$testFile2][$line], $count, "Line $line in TestClass2 should have same count");
+        }
+
+        // Generate report with merged coverage
+        $builder = Coverage::builder($this->testDir, $mergedCoverage);
+        $builder->includeAll();
+        $report_dir = $this->setupTestFolder('testMergeCoverage');
+        $builder->buildHtmlReport($report_dir);
+
+        // Verify both files are in the report
+        $this->assertFileExists($report_dir . '/TestClass1.php.html');
+        $this->assertFileExists($report_dir . '/TestClass2.php.html');
+        $debug1 = $this->extractCoverageDebug($report_dir . '/TestClass1.php.html');
+        $debug2 = $this->extractCoverageDebug($report_dir . '/TestClass2.php.html');
+        $this->assertNotNull($debug1, 'COVERAGE_DEBUG JSON should be present in TestClass1.php.html');
+        $this->assertNotNull($debug2, 'COVERAGE_DEBUG JSON should be present in TestClass2.php.html');
+        $this->assertEquals(1, $debug1['lines']);
+        $this->assertEquals(1, $debug1['executed_lines']);
+        $this->assertEquals(1, $debug1['files']);
+        $this->assertEquals(1, $debug1['executed_files']);
+        $this->assertEquals(100, $debug1['line_coverage']);
+        $this->assertEquals(100, $debug1['file_coverage']);
+        $this->assertEquals('file', $debug1['type']);
+        $this->assertEquals(1, $debug2['lines']);
+        $this->assertEquals(1, $debug2['executed_lines']);
+        $this->assertEquals(1, $debug2['files']);
+        $this->assertEquals(1, $debug2['executed_files']);
+        $this->assertEquals(100, $debug2['line_coverage']);
+        $this->assertEquals(100, $debug2['file_coverage']);
+        $this->assertEquals('file', $debug2['type']);
     }
 
     private function someFunction(): string

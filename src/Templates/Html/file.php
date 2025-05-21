@@ -4,7 +4,7 @@
  *
  * @var string $filename The name of the file
  * @var array $lines Array of lines with coverage information
- * @var array $summary Coverage summary statistics
+ * @var CoverageReporter\CoverageSummary $summary Coverage summary statistics
  * @var string $title
  * @var string $cssPath
  * @var array $breadcrumbs
@@ -12,6 +12,15 @@
 $summaryType = 'file';
 ob_start();
 include __DIR__ . '/summary.php';
+echo "<!-- COVERAGE_DEBUG: ".json_encode([
+    'lines' => $summary->total,
+    'executed_lines' => $summary->executed,
+    'files' => 1,
+    'executed_files' => $summary->executed > 0 ? 1 : 0,
+    'line_coverage' => $summary->coverage,
+    'file_coverage' => $summary->executed > 0 ? 100 : 0,
+    'type' => 'file'
+])." -->\n";
 ?>
 <!--
 Raw Xdebug Coverage Data:

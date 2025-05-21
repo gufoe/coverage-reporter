@@ -59,7 +59,38 @@ class Coverage
         }
         xdebug_stop_code_coverage();
         self::$isStarted = false;
+
         return $coverage;
+    }
+
+    /**
+     * Merge multiple coverage data arrays
+     * For overlapping lines, use the maximum execution count
+     *
+     * @param array ...$coverageArrays The coverage data arrays to merge
+     * @return array The merged coverage data
+     */
+    public static function mergeCoverage(array ...$coverageArrays): array
+    {
+        $merged = [];
+        foreach ($coverageArrays as $coverage) {
+            foreach ($coverage as $file => $lines) {
+                if (!isset($merged[$file])) {
+                    $merged[$file] = $lines;
+                    continue;
+                }
+
+                foreach ($lines as $line => $count) {
+                    if (!isset($merged[$file][$line])) {
+                        $merged[$file][$line] = $count;
+                    } else {
+                        // Use the maximum execution count
+                        $merged[$file][$line] = max($merged[$file][$line], $count);
+                    }
+                }
+            }
+        }
+        return $merged;
     }
 
     /**
