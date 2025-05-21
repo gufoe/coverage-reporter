@@ -61,7 +61,19 @@ class ReportDirectory implements ReportNode
      */
     private function validatePath(string $path): string
     {
-        $path = realpath($path);
+        // Convert to absolute path if it's not already
+        if (!str_starts_with($path, '/')) {
+            $path = realpath($this->path . '/' . $path);
+            if ($path === false) {
+                throw new \Exception("Path $path does not exist");
+            }
+        } else {
+            $path = realpath($path);
+            if ($path === false) {
+                throw new \Exception("Path $path does not exist");
+            }
+        }
+
         if (!PathUtils::startsWith($path, $this->path)) {
             throw new \Exception("Path $path is not in directory $this->path");
         }
