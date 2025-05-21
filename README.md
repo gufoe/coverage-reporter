@@ -71,7 +71,7 @@ Coverage::start();
 $coverage2 = Coverage::stop();
 
 // Merge the coverage arrays
-$mergedCoverage = Coverage::mergeCoverage($coverage1, $coverage2 /*, ... more runs */);
+$mergedCoverage = Coverage::mergeCoverage([$coverage1, $coverage2]);
 
 // Generate a single HTML report from the merged data
 Coverage::generateHtmlReport('/path/to/output/folder', $mergedCoverage);

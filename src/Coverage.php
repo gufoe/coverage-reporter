@@ -67,10 +67,10 @@ class Coverage
      * Merge multiple coverage data arrays
      * For overlapping lines, use the maximum execution count
      *
-     * @param array ...$coverageArrays The coverage data arrays to merge
+     * @param array $coverageArrays An array of coverage data arrays to merge
      * @return array The merged coverage data
      */
-    public static function mergeCoverage(array ...$coverageArrays): array
+    public static function mergeCoverage(array $coverageArrays): array
     {
         $merged = [];
         foreach ($coverageArrays as $coverage) {

@@ -418,7 +418,7 @@ class CoverageTest extends TestCase
         $coverage2 = Coverage::stop();
 
         // Merge coverage data
-        $mergedCoverage = Coverage::mergeCoverage($coverage1, $coverage2);
+        $mergedCoverage = Coverage::mergeCoverage([$coverage1, $coverage2]);
 
         // Verify merged coverage contains both files
         $this->assertArrayHasKey($testFile1, $mergedCoverage);
