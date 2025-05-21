@@ -4,12 +4,7 @@ namespace CoverageReporter;
 
 use CoverageReporter\ReportNode;
 use CoverageReporter\PathUtils;
-use PhpParser\NodeTraverser;
-use PhpParser\NodeVisitor\NameResolver;
-use PhpParser\ParserFactory;
-use PhpParser\Node;
-use PhpParser\Node\Stmt;
-use PhpParser\Node\Expr;
+use CoverageReporter\SyntheticCoverageGenerator;
 
 class ReportFile implements ReportNode
 {
@@ -38,125 +33,8 @@ class ReportFile implements ReportNode
      */
     private function initializeSyntheticCoverage(): void
     {
-        if (!file_exists($this->path)) {
-            return;
-        }
-
-        $code = file_get_contents($this->path);
-        if ($code === false) {
-            return;
-        }
-
-        $parser = (new ParserFactory)->createForNewestSupportedVersion();
-        try {
-            $ast = $parser->parse($code);
-            if ($ast === null) {
-                return;
-            }
-
-            // Create a traverser to resolve names
-            $traverser = new NodeTraverser();
-            $traverser->addVisitor(new NameResolver());
-            $ast = $traverser->traverse($ast);
-
-            // Mark executable lines as not executed (-1)
-            foreach ($ast as $node) {
-                $this->markExecutableLines($node);
-            }
-        } catch (\PhpParser\Error $e) {
-            // If parsing fails, we'll just have an empty coverage data
-            return;
-        }
-    }
-
-    /**
-     * Recursively mark executable lines in the AST
-     */
-    private function markExecutableLines(Node $node): void
-    {
-        // Skip nodes without line information
-        if (!isset($node->getAttributes()['startLine'])) {
-            return;
-        }
-
-        $startLine = $node->getAttributes()['startLine'];
-        $endLine = $node->getAttributes()['endLine'] ?? $startLine;
-
-        // Only mark lines that contain executable code as not executed (-1)
-        if ($this->isExecutableNode($node)) {
-            for ($line = $startLine; $line <= $endLine; $line++) {
-                $this->coverageData[$line] = -1;
-            }
-        }
-
-        // Recursively process child nodes
-        foreach ($node->getSubNodeNames() as $name) {
-            $subNode = $node->$name;
-            if ($subNode instanceof Node) {
-                $this->markExecutableLines($subNode);
-            } elseif (is_array($subNode)) {
-                foreach ($subNode as $child) {
-                    if ($child instanceof Node) {
-                        $this->markExecutableLines($child);
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * Check if a node represents executable code
-     */
-    private function isExecutableNode(Node $node): bool
-    {
-        // Only mark actual executable statements
-        if ($node instanceof Stmt\Return_) {
-            return true;
-        }
-
-        // Function declarations and class declarations are not executable
-        if ($node instanceof Stmt\Class_ ||
-            $node instanceof Stmt\Function_ ||
-            $node instanceof Stmt\Interface_ ||
-            $node instanceof Stmt\Trait_ ||
-            $node instanceof Stmt\Namespace_) {
-            return false;
-        }
-
-        // Expressions that are part of a statement are executable
-        if ($node instanceof Expr) {
-            // Skip expressions that are part of declarations
-            $parent = $node->getAttribute('parent');
-            if ($parent instanceof Stmt\Class_ ||
-                $parent instanceof Stmt\Function_ ||
-                $parent instanceof Stmt\Interface_ ||
-                $parent instanceof Stmt\Trait_) {
-                return false;
-            }
-            return true;
-        }
-
-        // Control structures are executable
-        if ($node instanceof Stmt\If_ ||
-            $node instanceof Stmt\ElseIf_ ||
-            $node instanceof Stmt\Else_ ||
-            $node instanceof Stmt\For_ ||
-            $node instanceof Stmt\Foreach_ ||
-            $node instanceof Stmt\While_ ||
-            $node instanceof Stmt\Do_ ||
-            $node instanceof Stmt\Switch_ ||
-            $node instanceof Stmt\Case_ ||
-            $node instanceof Stmt\TryCatch ||
-            $node instanceof Stmt\Catch_ ||
-            $node instanceof Stmt\Finally_ ||
-            $node instanceof Stmt\Break_ ||
-            $node instanceof Stmt\Continue_ ||
-            $node instanceof Stmt\Goto_ ||
-            $node instanceof Stmt\Label) {
-            return true;
-        }
-
-        return false;
+        $generator = new SyntheticCoverageGenerator($this->getSource());
+        $this->coverageData = $generator->generate();
     }
 
     /**
