@@ -97,11 +97,13 @@ class ReportDirectory implements ReportNode
     {
         $directory = $this->validatePath($directory);
         if (PathUtils::dirname($directory) === $this->path) {
-            if (!isset($this->directories[PathUtils::basename($directory)])) {
+            // Use the full path as the key to handle nested directories with same name
+            $key = $directory;
+            if (!isset($this->directories[$key])) {
                 $coverageDir = new ReportDirectory($directory);
-                $this->directories[PathUtils::basename($directory)] = $coverageDir;
+                $this->directories[$key] = $coverageDir;
             }
-            return $this->directories[PathUtils::basename($directory)];
+            return $this->directories[$key];
         }
         $parentDir = PathUtils::dirname($directory);
         if ($parentDir === $this->path || $parentDir === '' || $parentDir === $directory) {
