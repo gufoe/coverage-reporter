@@ -31,7 +31,6 @@ Execute the following code in your project with `php -d xdebug.mode=coverage` to
 
 If using php-fpm, you will have to set the `xdebug.mode` in the configuration file (e.g. `php-fpm.conf`).
 
-
 ```php
 use CoverageReporter\Coverage;
 
@@ -53,6 +52,32 @@ Coverage::generateHtmlReport('/path/to/output/folder', $coverageData, [
     '/path/to/include/file.php',
 ]);
 ```
+
+## Merging Multiple Coverage Runs
+
+You can merge coverage data from multiple, separate runs (for example, if you run different test suites or scripts independently) and generate a single unified report. This is useful for combining coverage from different sources or parallel test runs.
+
+```php
+use CoverageReporter\Coverage;
+
+// Run 1
+Coverage::start();
+// ... code or tests for the first run ...
+$coverage1 = Coverage::stop();
+
+// Run 2
+Coverage::start();
+// ... code or tests for the second run ...
+$coverage2 = Coverage::stop();
+
+// Merge the coverage arrays
+$mergedCoverage = Coverage::mergeCoverage($coverage1, $coverage2 /*, ... more runs */);
+
+// Generate a single HTML report from the merged data
+Coverage::generateHtmlReport('/path/to/output/folder', $mergedCoverage);
+```
+
+You can merge as many coverage arrays as you need. The merged report will reflect the combined coverage from all runs.
 
 ## Architecture
 
